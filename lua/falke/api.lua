@@ -95,11 +95,23 @@ function M.get_models(callback)
     end
 
     -- Extract model IDs from response
-    if json.data and type(json.data) == "table" then
-      local models = {}
-      for _, model in ipairs(json.data) do
-        if model.id then
-          table.insert(models, model.id)
+    local models = {}
+    local function extract_model_id(item)
+      if type(item) == "string" then
+        return item
+      elseif item.id then
+        return item.id
+      end
+      return nil
+    end
+
+    local source_data = json.data and type(json.data) == "table" and json.data or json
+
+    if type(source_data) == "table" then
+      for _, model in ipairs(source_data) do
+        local model_id = extract_model_id(model)
+        if model_id then
+          table.insert(models, model_id)
         end
       end
       callback(models, nil)
