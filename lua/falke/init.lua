@@ -75,4 +75,13 @@ function M.refresh_models()
   end, true)
 end
 
+function M.set_temperature(temp)
+  config.set_temperature(temp)
+  vim.notify("Set temperature to " .. temp, vim.log.levels.INFO)
+end
+
+function M.get_temperature()
+  vim.notify("Temperature set to " .. config.get_temperature(), vim.log.levels.INFO)
+end
+
 return M

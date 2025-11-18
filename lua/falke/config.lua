@@ -8,6 +8,7 @@ local defaults = {
   model = nil, -- Will be set from first available model
   stream = false, -- Enable streaming responses
   route_overrides = {},
+  temperature = 0.6,
 }
 
 -- Current configuration (merged from setup() and env vars)
@@ -85,6 +86,14 @@ end
 -- Get stream setting
 function M.get_stream()
   return M.options.stream
+end
+
+function M.get_temperature()
+  return M.options.temperature
+end
+
+function M.set_temperature(temp)
+  M.options.temperature = temp
 end
 
 return M

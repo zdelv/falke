@@ -217,6 +217,7 @@ local function build_chat_args(model, messages)
   local use_stream = config.get_stream()
   local endpoint = config.get_endpoint()
   local api_key = config.get_api_key()
+  local temperature = config.get_temperature()
   local route = config.get_route_override("completions") or "/v1/chat/completions"
 
   local url = endpoint .. route
@@ -224,7 +225,7 @@ local function build_chat_args(model, messages)
   local payload = vim.json.encode({
     model = model,
     messages = messages,
-    temperature = 0.7,
+    temperature = temperature,
     stream = use_stream,
   })
 
