@@ -7,6 +7,7 @@ local defaults = {
   timeout = 30000, -- 30 seconds
   model = nil, -- Will be set from first available model
   stream = false, -- Enable streaming responses
+  route_overrides = {},
 }
 
 -- Current configuration (merged from setup() and env vars)
@@ -44,6 +45,10 @@ function M.get_api_key()
   end
 
   return nil
+end
+
+function M.get_route_override(route)
+  return M.options.route_overrides[route]
 end
 
 -- Validate that configuration is complete

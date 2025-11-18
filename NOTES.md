@@ -22,7 +22,7 @@ I've only tested lazy.nvim. YMMV with the other package managers.
 
 ```lua
 {
-  'https://tangled.org/@finfet.sh/falke',
+  'zdelv/falke',
   config = function()
     require('falke').setup({
       endpoint = 'https://api.openai.com',  -- Your OpenAI-compatible endpoint
@@ -36,7 +36,7 @@ I've only tested lazy.nvim. YMMV with the other package managers.
 
 ```lua
 use {
-  'https://tangled.org/@finfet.sh/falke',
+  'zdelv/falke',
   config = function()
     require('falke').setup({
       endpoint = 'https://api.openai.com',
@@ -49,7 +49,7 @@ use {
 ### Using [vim-plug](https://github.com/junegunn/vim-plug)
 
 ```vim
-Plug 'https://tangled.org/@finfet.sh/falke',
+Plug 'zdelv/falke'
 ```
 
 Then in your `init.lua`:

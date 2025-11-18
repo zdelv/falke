@@ -11,18 +11,22 @@ local function execute_curl_base(args, handlers)
   local handle = vim.system(args, {
     stdout = function(_, data)
       if data then
-        if handlers.on_stdout then
-          handlers.on_stdout(data)
-        end
         table.insert(stdout_data, data)
+        if handlers.on_stdout then
+          vim.schedule(function()
+            handlers.on_stdout(data)
+          end)
+        end
       end
     end,
     stderr = function(_, data)
       if data then
-        if handlers.on_stderr then
-          handlers.on_stderr(data)
-        end
         table.insert(stderr_data, data)
+        if handlers.on_stderr then
+          vim.schedule(function()
+            handlers.on_stderr(data)
+          end)
+        end
       end
     end,
   }, function(result)
@@ -57,7 +61,7 @@ local function execute_curl_json(args, callback)
   })
 end
 
--- Fetch available models from /v1/models endpoint
+-- Fetch available models from models endpoint
 function M.get_models(callback)
   local ok, err = config.validate()
   if not ok then
@@ -67,7 +71,8 @@ function M.get_models(callback)
 
   local endpoint = config.get_endpoint()
   local api_key = config.get_api_key()
-  local url = endpoint .. "/v1/models"
+  local route = config.get_route_override("models") or "/v1/models"
+  local url = endpoint .. route
 
   local args = {
     "curl",
@@ -200,7 +205,9 @@ local function build_chat_args(model, messages)
   local use_stream = config.get_stream()
   local endpoint = config.get_endpoint()
   local api_key = config.get_api_key()
-  local url = endpoint .. "/v1/chat/completions"
+  local route = config.get_route_override("completions") or "/v1/chat/completions"
+
+  local url = endpoint .. route
 
   local payload = vim.json.encode({
     model = model,
