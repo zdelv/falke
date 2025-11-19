@@ -1,6 +1,8 @@
 local api = require("falke.api")
 local config = require("falke.config")
 
+local fidget = require("fidget")
+
 local M = {}
 
 -- Cache for fetched models
@@ -24,10 +26,10 @@ function M.fetch_models(callback, force_refresh)
     M.cached_models = models
 
     -- If no model is currently selected and we have models, select the first one
-    if not config.get_model() and models and #models > 0 then
-      config.set_model(models[1])
-      vim.notify("Auto-selected model: " .. models[1], vim.log.levels.INFO)
-    end
+    -- if models and #models > 0 then
+    --   config.set_model(models[1])
+    --   -- fidget.notify("Auto-selected model: " .. models[1], vim.log.levels.INFO)
+    -- end
 
     callback(models, nil)
   end)
@@ -46,12 +48,13 @@ function M.set_model(model_name)
     end
 
     if not found then
-      vim.notify("Warning: Model '" .. model_name .. "' not in cached list", vim.log.levels.WARN)
+      fidget.notify("Model '" .. model_name .. "' not in cached list", vim.log.levels.WARN)
+      model_name = M.cached_models[1]
     end
   end
 
   config.set_model(model_name)
-  vim.notify("Model set to: " .. model_name, vim.log.levels.INFO)
+  fidget.notify("Model set to: " .. model_name, vim.log.levels.INFO)
 end
 
 -- Get the current model

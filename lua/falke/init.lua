@@ -3,6 +3,8 @@ local models = require("falke.models")
 local prompt = require("falke.prompt")
 local ui = require("falke.ui")
 
+local fidget = require("fidget")
+
 local M = {}
 
 -- Setup function called by user
@@ -12,8 +14,9 @@ function M.setup(opts)
   -- Auto-fetch models on setup
   models.fetch_models(function(model_list, err)
     if err then
-      vim.notify("Failed to fetch models: " .. err, vim.log.levels.WARN)
+      fidget.notify("Failed to fetch models: " .. err, vim.log.levels.WARN)
     end
+    models.set_model(config.get_model())
   end)
 end
 
@@ -30,7 +33,7 @@ end
 -- Set the current model
 function M.set_model(model_name)
   if not model_name or model_name == "" then
-    vim.notify("Model name required", vim.log.levels.ERROR)
+    fidget.notify("Model name required", vim.log.levels.ERROR)
     return
   end
 
@@ -41,7 +44,7 @@ end
 function M.list_models()
   models.fetch_models(function(model_list, err)
     if err then
-      vim.notify("Failed to fetch models: " .. err, vim.log.levels.ERROR)
+      fidget.notify("Failed to fetch models: " .. err, vim.log.levels.ERROR)
       return
     end
 
@@ -56,9 +59,9 @@ end
 function M.get_current_model()
   local current = models.get_current_model()
   if current then
-    vim.notify("Current model: " .. current, vim.log.levels.INFO)
+    fidget.notify("Current model: " .. current, vim.log.levels.INFO)
   else
-    vim.notify("No model selected", vim.log.levels.WARN)
+    fidget.notify("No model selected", vim.log.levels.WARN)
   end
   return current
 end
@@ -68,20 +71,20 @@ function M.refresh_models()
   models.clear_cache()
   models.fetch_models(function(model_list, err)
     if err then
-      vim.notify("Failed to refresh models: " .. err, vim.log.levels.ERROR)
+      fidget.notify("Failed to refresh models: " .. err, vim.log.levels.ERROR)
       return
     end
-    vim.notify("Models refreshed (" .. #model_list .. " models found)", vim.log.levels.INFO)
+    fidget.notify("Models refreshed (" .. #model_list .. " models found)", vim.log.levels.INFO)
   end, true)
 end
 
 function M.set_temperature(temp)
   config.set_temperature(temp)
-  vim.notify("Set temperature to " .. temp, vim.log.levels.INFO)
+  fidget.notify("Set temperature to " .. temp, vim.log.levels.INFO)
 end
 
 function M.get_temperature()
-  vim.notify("Temperature set to " .. config.get_temperature(), vim.log.levels.INFO)
+  fidget.notify("Temperature set to " .. config.get_temperature(), vim.log.levels.INFO)
 end
 
 return M

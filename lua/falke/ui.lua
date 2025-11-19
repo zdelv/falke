@@ -97,7 +97,7 @@ end
 -- Show a model selection list
 function M.show_model_list(models, current_model, on_select)
   if not models or #models == 0 then
-    vim.notify("No models available", vim.log.levels.WARN)
+    fidget.notify("No models available", vim.log.levels.WARN)
     return
   end
 

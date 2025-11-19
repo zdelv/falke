@@ -2,6 +2,9 @@ local api = require("falke.api")
 local ui = require("falke.ui")
 local config = require("falke.config")
 
+local fidget = require("fidget")
+local progress = require("fidget.progress")
+
 local M = {}
 
 -- Extract code from LLM response (remove markdown code blocks, explanations)
@@ -108,7 +111,7 @@ Return ONLY the modified code that should replace the selected code block.]],
 end
 
 -- Replace visual selection with new code
-local function replace_selection(new_code, start_pos, end_pos)
+local function replace_selection(new_code, start_pos, end_pos, buf)
   local start_line, start_col = start_pos[1], start_pos[2]
   local end_line, end_col = end_pos[1], end_pos[2]
 
@@ -116,7 +119,7 @@ local function replace_selection(new_code, start_pos, end_pos)
   local new_lines = vim.split(new_code, "\n", { plain = true })
 
   -- Get the actual line to ensure end_col is valid
-  local line = vim.api.nvim_buf_get_lines(0, end_line - 1, end_line, false)[1]
+  local line = vim.api.nvim_buf_get_lines(buf, end_line - 1, end_line, false)[1]
   if line then
     -- Clamp end_col to the line length (in bytes)
     -- In visual line mode, end_col can be very large
@@ -126,20 +129,25 @@ local function replace_selection(new_code, start_pos, end_pos)
   -- Delete the old selection and insert new code
   -- nvim_buf_set_text uses 0-indexed lines and columns
   -- start_col is inclusive (subtract 1), end_col is exclusive (no subtraction needed)
-  vim.api.nvim_buf_set_text(0, start_line - 1, start_col - 1, end_line - 1, end_col, new_lines)
+  vim.api.nvim_buf_set_text(buf, start_line - 1, start_col - 1, end_line - 1, end_col, new_lines)
 end
 
 -- Handle streaming response for visual selection
-local function handle_streaming_response(messages, loading_win, start_pos, end_pos)
+local function handle_streaming_response(messages, start_pos, end_pos, buf)
   local accumulated = ""
   local stream_started = false
   local last_end_line = start_pos[1]
   local last_end_col = start_pos[2]
 
+  local proc = progress.handle.create({
+    name = "falke",
+    title = "Processing",
+    message = "Waiting for LLM to begin streaming...",
+  })
+
   api.chat_completion(messages, function(chunk, err, is_partial)
     if err then
-      ui.close_window(loading_win)
-      vim.notify("Error: " .. err, vim.log.levels.ERROR)
+      fidget.notify("Error: " .. err, vim.log.levels.ERROR)
       return
     end
 
@@ -156,18 +164,20 @@ local function handle_streaming_response(messages, loading_win, start_pos, end_p
       if not stream_started then
         -- First chunk: clear selection and prepare for streaming
         stream_started = true
-        ui.close_window(loading_win)
+        proc:report({
+          message = "Reading from stream...",
+        })
 
         -- Clear the selection first by deleting it completely
         local end_line = end_pos[1]
         local end_col = end_pos[2]
-        local line = vim.api.nvim_buf_get_lines(0, end_line - 1, end_line, false)[1]
+        local line = vim.api.nvim_buf_get_lines(buf, end_line - 1, end_line, false)[1]
         if line then
           end_col = math.min(end_col, #line)
         end
 
         -- Delete the selection - use empty table {} to properly remove all text
-        vim.api.nvim_buf_set_text(0, start_pos[1] - 1, start_pos[2] - 1, end_line - 1, end_col, {})
+        vim.api.nvim_buf_set_text(buf, start_pos[1] - 1, start_pos[2] - 1, end_line - 1, end_col, {})
 
         -- After clearing, the end position is at the start
         last_end_line = start_pos[1]
@@ -177,11 +187,15 @@ local function handle_streaming_response(messages, loading_win, start_pos, end_p
       -- Common code for both partial and complete streaming
       local extracted = extract_code(accumulated)
       local lines = vim.split(extracted, "\n", { plain = true })
-      vim.api.nvim_buf_set_text(0, start_pos[1] - 1, start_pos[2] - 1, last_end_line - 1, last_end_col - 1, lines)
+      vim.api.nvim_buf_set_text(buf, start_pos[1] - 1, start_pos[2] - 1, last_end_line - 1, last_end_col - 1, lines)
 
       if not is_partial then
         -- Streaming complete
-        vim.notify("Code updated successfully", vim.log.levels.INFO)
+        proc:report({
+          message = "Code finished streaming",
+          done = true,
+        })
+        fidget.notify("Code updated successfully", vim.log.levels.INFO)
       else
         -- Still streaming - update the end position for next iteration
         if #lines == 1 then
@@ -197,23 +211,30 @@ local function handle_streaming_response(messages, loading_win, start_pos, end_p
 end
 
 -- Handle non-streaming response for visual selection
-local function handle_non_streaming_response(messages, loading_win, start_pos, end_pos)
+local function handle_non_streaming_response(messages, start_pos, end_pos, buf)
   api.chat_completion(messages, function(response, err)
-    -- Close loading indicator
-    ui.close_window(loading_win)
-
     if err then
-      vim.notify("Error: " .. err, vim.log.levels.ERROR)
+      fidget.notify("Error: " .. err, vim.log.levels.ERROR)
       return
     end
+
+    local proc = progress.handle.create({
+      name = "falke",
+      title = "Processing",
+      message = "Waiting for LLM return response...",
+    })
 
     -- Extract code from response
     local new_code = extract_code(response)
 
     -- Replace the selection
-    replace_selection(new_code, start_pos, end_pos)
+    replace_selection(new_code, start_pos, end_pos, buf)
 
-    vim.notify("Code updated successfully", vim.log.levels.INFO)
+    proc:report({
+      message = "Code returned from LLM",
+      done = true,
+    })
+    fidget.notify("Code updated successfully", vim.log.levels.INFO)
   end)
 end
 
@@ -233,7 +254,7 @@ function M.prompt_visual_selection()
     local end_pos = vim.fn.getpos("'>")
 
     if start_pos[2] == 0 or end_pos[2] == 0 then
-      vim.notify("No visual selection. Enter visual mode and select code first.", vim.log.levels.WARN)
+      fidget.notify("No visual selection. Enter visual mode and select code first.", vim.log.levels.WARN)
       return
     end
   end
@@ -242,7 +263,7 @@ function M.prompt_visual_selection()
   local selected_code, start_pos, end_pos = get_visual_selection()
 
   if not selected_code then
-    vim.notify("Failed to get visual selection", vim.log.levels.ERROR)
+    fidget.notify("Failed to get visual selection", vim.log.levels.ERROR)
     return
   end
 
@@ -250,26 +271,25 @@ function M.prompt_visual_selection()
   local file_content = get_buffer_content()
   local filetype = get_filetype()
 
+  local buf = vim.api.nvim_get_current_buf()
+
   -- Show input prompt
   ui.show_prompt_input(function(user_prompt)
     if not user_prompt or user_prompt == "" then
-      vim.notify("No prompt provided", vim.log.levels.WARN)
+      fidget.notify("No prompt provided", vim.log.levels.WARN)
       return
     end
 
     -- Build messages
     local messages = build_messages(user_prompt, selected_code, file_content, filetype)
 
-    -- Show loading indicator
-    local loading_win = ui.show_loading("Waiting for LLM response...")
-
     -- Check if streaming is enabled
     local is_streaming = config.get_stream()
 
     if is_streaming then
-      handle_streaming_response(messages, loading_win, start_pos, end_pos)
+      handle_streaming_response(messages, start_pos, end_pos, buf)
     else
-      handle_non_streaming_response(messages, loading_win, start_pos, end_pos)
+      handle_non_streaming_response(messages, start_pos, end_pos, buf)
     end
   end)
 end
@@ -336,26 +356,32 @@ Return the complete modified file content.]],
 end
 
 -- Replace entire file with new content
-local function replace_file(new_content)
+local function replace_file(new_content, buf)
   -- Split new content into lines
   local new_lines = vim.split(new_content, "\n", { plain = true })
 
   -- Get current line count
-  local line_count = vim.api.nvim_buf_line_count(0)
+  local line_count = vim.api.nvim_buf_line_count(buf)
 
   -- Replace all lines in the buffer
-  vim.api.nvim_buf_set_lines(0, 0, line_count, false, new_lines)
+  vim.api.nvim_buf_set_lines(buf, 0, line_count, false, new_lines)
 end
 
 -- Handle streaming response for full file
-local function handle_streaming_file_response(messages, loading_win)
+local function handle_streaming_file_response(messages, buf)
   local accumulated = ""
   local stream_started = false
 
+  local proc = progress.handle.create({
+    name = "falke",
+    title = "Processing",
+    message = "Waiting for LLM to begin streaming...",
+  })
+
   api.chat_completion(messages, function(chunk, err, is_partial)
     if err then
-      ui.close_window(loading_win)
-      vim.notify("Error: " .. err, vim.log.levels.ERROR)
+      fidget.notify("Error: " .. err, vim.log.levels.ERROR)
+      proc:cancel()
       return
     end
 
@@ -372,32 +398,42 @@ local function handle_streaming_file_response(messages, loading_win)
       if not stream_started then
         -- First chunk: clear file and prepare for streaming
         stream_started = true
-        ui.close_window(loading_win)
+        proc:report({
+          message = "Reading from stream...",
+        })
 
         -- Clear the entire file
         local line_count = vim.api.nvim_buf_line_count(0)
-        vim.api.nvim_buf_set_lines(0, 0, line_count, false, { "" })
+        vim.api.nvim_buf_set_lines(buf, 0, line_count, false, { "" })
       end
 
       local extracted = extract_code(accumulated)
       local lines = vim.split(extracted, "\n", { plain = true })
-      vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 
       if not is_partial then
-        vim.notify("File updated successfully", vim.log.levels.INFO)
+        proc:report({
+          message = "Code finished streaming",
+          done = true,
+        })
+        fidget.notify("File updated successfully", vim.log.levels.INFO)
       end
     end
   end)
 end
 
 -- Handle non-streaming response for full file
-local function handle_non_streaming_file_response(messages, loading_win)
+local function handle_non_streaming_file_response(messages, buf)
   api.chat_completion(messages, function(response, err)
-    -- Close loading indicator
-    ui.close_window(loading_win)
+    local proc = progress.handle.create({
+      name = "falke",
+      title = "Processing",
+      message = "Waiting for LLM to return response...",
+    })
 
     if err then
-      vim.notify("Error: " .. err, vim.log.levels.ERROR)
+      fidget.notify("Error: " .. err, vim.log.levels.ERROR)
+      proc:cancel()
       return
     end
 
@@ -405,9 +441,13 @@ local function handle_non_streaming_file_response(messages, loading_win)
     local new_content = extract_code(response)
 
     -- Replace the entire file
-    replace_file(new_content)
+    replace_file(new_content, buf)
 
-    vim.notify("File updated successfully", vim.log.levels.INFO)
+    proc:report({
+      message = "Code returned from LLM",
+      done = true,
+    })
+    fidget.notify("File updated successfully", vim.log.levels.INFO)
   end)
 end
 
@@ -417,26 +457,25 @@ function M.prompt_full_file()
   local file_content = get_buffer_content()
   local filetype = get_filetype()
 
+  local buf = vim.api.nvim_get_current_buf()
+
   -- Show input prompt
   ui.show_prompt_input(function(user_prompt)
     if not user_prompt or user_prompt == "" then
-      vim.notify("No prompt provided", vim.log.levels.WARN)
+      fidget.notify("No prompt provided", vim.log.levels.WARN)
       return
     end
 
     -- Build messages
     local messages = build_file_messages(user_prompt, file_content, filetype)
 
-    -- Show loading indicator
-    local loading_win = ui.show_loading("Waiting for LLM response...")
-
     -- Check if streaming is enabled
     local is_streaming = config.get_stream()
 
     if is_streaming then
-      handle_streaming_file_response(messages, loading_win)
+      handle_streaming_file_response(messages, buf)
     else
-      handle_non_streaming_file_response(messages, loading_win)
+      handle_non_streaming_file_response(messages, buf)
     end
   end)
 end

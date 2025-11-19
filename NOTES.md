@@ -23,6 +23,9 @@ I've only tested lazy.nvim. YMMV with the other package managers.
 ```lua
 {
   'zdelv/falke',
+  dependencies = {
+    'j-hui/fidget.nvim'
+  },
   config = function()
     require('falke').setup({
       endpoint = 'https://api.openai.com',  -- Your OpenAI-compatible endpoint
@@ -30,35 +33,6 @@ I've only tested lazy.nvim. YMMV with the other package managers.
     })
   end
 }
-```
-
-### Using [packer.nvim](https://github.com/wbthomason/packer.nvim)
-
-```lua
-use {
-  'zdelv/falke',
-  config = function()
-    require('falke').setup({
-      endpoint = 'https://api.openai.com',
-      api_key = 'your-api-key-here',
-    })
-  end
-}
-```
-
-### Using [vim-plug](https://github.com/junegunn/vim-plug)
-
-```vim
-Plug 'zdelv/falke'
-```
-
-Then in your `init.lua`:
-
-```lua
-require('falke').setup({
-  endpoint = 'https://api.openai.com',
-  api_key = 'your-api-key-here',
-})
 ```
 
 ## Configuration
