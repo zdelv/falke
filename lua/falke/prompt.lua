@@ -221,7 +221,7 @@ local function handle_non_streaming_response(messages, start_pos, end_pos, buf)
     local proc = progress.handle.create({
       name = "falke",
       title = "Processing",
-      message = "Waiting for LLM return response...",
+      message = "Waiting for LLM to return response...",
     })
 
     -- Extract code from response
